@@ -4,9 +4,9 @@
 
 import { SqliteUserStore } from '../../src/data/SqliteUserStore';
 import { MoChatDatabase } from '../../src/data/Database';
-import { UserType } from '../../src/types';
-import { unlinkSync } from 'fs';
-import { join } from 'path';
+import { Agent, UserType } from '../../src/types';
+import { unlinkSync, mkdirSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
 
 describe('SqliteUserStore', () => {
   let db: MoChatDatabase;
@@ -14,6 +14,11 @@ describe('SqliteUserStore', () => {
   const testDbPath = join(__dirname, '../../data/test.db');
 
   beforeEach(() => {
+    // Ensure data directory exists
+    const dir = dirname(testDbPath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
     // Clean up any existing test database
     try {
       unlinkSync(testDbPath);
@@ -79,7 +84,7 @@ describe('SqliteUserStore', () => {
 
   describe('createAgent', () => {
     it('should create an agent with token', () => {
-      const agent = {
+      const agent: Agent = {
         id: 'agent-1',
         type: UserType.AGENT,
         username: 'testagent',
@@ -103,7 +108,7 @@ describe('SqliteUserStore', () => {
     });
 
     it('should retrieve agent by token', () => {
-      const agent = {
+      const agent: Agent = {
         id: 'agent-2',
         type: UserType.AGENT,
         username: 'tokenagent',
@@ -205,7 +210,7 @@ describe('SqliteUserStore', () => {
 
   describe('updateAgentToken', () => {
     it('should update agent token', () => {
-      const agent = {
+      const agent: Agent = {
         id: 'agent-3',
         type: UserType.AGENT,
         username: 'tokentest',
@@ -351,6 +356,11 @@ describe('SqliteUserStore', () => {
 
   describe('searchUsers', () => {
     beforeEach(() => {
+    // Ensure data directory exists
+    const dir = dirname(testDbPath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
       store.createUser({
         id: 'user-9',
         type: UserType.HUMAN,

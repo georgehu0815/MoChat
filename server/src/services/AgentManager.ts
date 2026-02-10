@@ -91,8 +91,8 @@ export class AgentManager {
     return {
       token: agent.token,
       botUserId: agent.id,
-      workspaceId: agent.workspaceId,
-      groupId: agent.groupId,
+      workspaceId: agent.workspaceId!,
+      groupId: agent.groupId!,
     };
   }
 

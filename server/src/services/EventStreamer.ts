@@ -24,7 +24,7 @@ export class EventStreamer {
     httpServer: HttpServer,
     private userStore: IUserStore,
     private metadataStore: MetadataStore,
-    private messageRouter: MessageRouter,
+    private _messageRouter: MessageRouter,
     options: {
       path?: string;
       cors?: any;
@@ -48,6 +48,15 @@ export class EventStreamer {
    */
   private setupAuthentication(): void {
     this.io.use((socket, next) => {
+      // BYPASS: Skip authentication if DISABLE_AUTH is enabled
+      if (process.env.DISABLE_AUTH === 'true') {
+        console.log('⚠️  Socket.io authentication DISABLED - bypassing auth check');
+        (socket.data as SocketData).userId = 'test-agent-id';
+        (socket.data as SocketData).token = 'test-token';
+        next();
+        return;
+      }
+
       const token =
         socket.handshake.auth.token ||
         socket.handshake.query.token ||

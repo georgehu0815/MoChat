@@ -13,7 +13,7 @@ import { AppError } from '../middleware/errorHandler';
 
 export class PanelManager {
   constructor(
-    private userStore: IUserStore,
+    private _userStore: IUserStore,
     private messageStore: MessageStore,
     private metadataStore: MetadataStore
   ) {}

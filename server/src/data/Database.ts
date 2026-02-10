@@ -4,21 +4,24 @@
  */
 
 import Database from 'better-sqlite3';
-import { join } from 'path';
+import { dirname, resolve } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
 export class MoChatDatabase {
   private db: Database.Database;
 
   constructor(dbPath: string = './data/mochat.db') {
-    // Ensure data directory exists
-    const dataDir = join(process.cwd(), 'data');
-    if (!existsSync(dataDir)) {
-      mkdirSync(dataDir, { recursive: true });
+    // Resolve the absolute path
+    const absolutePath = resolve(process.cwd(), dbPath);
+
+    // Ensure parent directory exists
+    const dir = dirname(absolutePath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
     }
 
     // Open/create database
-    this.db = new Database(join(process.cwd(), dbPath), {
+    this.db = new Database(absolutePath, {
       verbose: console.log.bind(console, '[SQL]')
     });
 

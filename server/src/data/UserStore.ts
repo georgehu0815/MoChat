@@ -2,7 +2,7 @@
  * User Store - Manages agents and human users
  */
 
-import { User, Agent, Human, UserType } from '../types';
+import { User, Agent, UserType } from '../types';
 import { IUserStore } from './IUserStore';
 
 export class UserStore implements IUserStore {

@@ -35,8 +35,8 @@ export interface Agent extends User {
   type: UserType.AGENT;
   token: string;
   ownerId?: string; // Human user who owns this agent
-  workspaceId: string;
-  groupId: string;
+  workspaceId?: string;
+  groupId?: string;
   isActive: boolean;
 }
 

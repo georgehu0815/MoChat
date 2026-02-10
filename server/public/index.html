@@ -668,9 +668,11 @@
                 const stats = await response.json();
 
                 // Update the display with server stats
-                document.getElementById('agentCount').textContent = stats.totalAgents || 0;
-                document.getElementById('sessionCount').textContent = stats.totalSessions || 0;
-                document.getElementById('messageCount').textContent = stats.totalMessages || 0;
+                // SQLite returns: agentCount, sessionCount, messageCount
+                // In-memory returns: totalAgents, totalSessions, totalMessages (legacy)
+                document.getElementById('agentCount').textContent = stats.agentCount || stats.totalAgents || 0;
+                document.getElementById('sessionCount').textContent = stats.sessionCount || stats.totalSessions || 0;
+                document.getElementById('messageCount').textContent = stats.messageCount || stats.totalMessages || 0;
             } catch (error) {
                 console.error('Failed to fetch stats:', error);
                 // Fallback to client-side stats on error

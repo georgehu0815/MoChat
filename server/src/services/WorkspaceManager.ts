@@ -12,7 +12,7 @@ import { AppError } from '../middleware/errorHandler';
 export class WorkspaceManager {
   constructor(
     private metadataStore: MetadataStore,
-    private userStore: IUserStore
+    private _userStore: IUserStore
   ) {}
 
   /**
