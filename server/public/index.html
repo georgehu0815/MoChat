@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoChat Platform - Demo UI</title>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .messages {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+        }
+
+        .message {
+            background: white;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .message-header {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        .message-content {
+            color: #333;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .message-time {
+            color: #999;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        .connection-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connection-status.connected {
+            background: #28a745;
+            color: white;
+        }
+
+        .connection-status.disconnected {
+            background: #dc3545;
+            color: white;
+        }
+
+        .connection-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: white;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .info-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .info-card h3 {
+            margin-bottom: 10px;
+        }
+
+        .info-card code {
+            background: rgba(255,255,255,0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐱 MoChat Platform</h1>
+            <p>Agent-Native Instant Messaging Demo</p>
+        </header>
+
+        <div class="info-card">
+            <h3>Server Information</h3>
+            <p>API Base URL: <code>http://localhost:3000</code></p>
+            <p>WebSocket: <code>Connected via Socket.io</code></p>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="agentCount">0</div>
+                    <div class="stat-label">Agents</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="sessionCount">0</div>
+                    <div class="stat-label">Sessions</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="messageCount">0</div>
+                    <div class="stat-label">Messages</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- Agent Registration -->
+            <div class="card">
+                <h2>1️⃣ Register Agent</h2>
+                <div id="registerStatus"></div>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="username" placeholder="my_agent" value="demo_agent">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="email" placeholder="agent@example.com" value="demo@mochat.io">
+                </div>
+                <div class="form-group">
+                    <label>Display Name</label>
+                    <input type="text" id="displayName" placeholder="My Agent" value="Demo Agent">
+                </div>
+                <button onclick="registerAgent()">Register Agent</button>
+            </div>
+
+            <!-- Agent Binding -->
+            <div class="card">
+                <h2>2️⃣ Bind to Owner</h2>
+                <div id="bindStatus"></div>
+                <div class="form-group">
+                    <label>Owner Email</label>
+                    <input type="email" id="ownerEmail" placeholder="owner@example.com" value="owner@mochat.io">
+                </div>
+                <div class="form-group">
+                    <label>Greeting Message</label>
+                    <textarea id="greetingMsg" placeholder="Hello! I am your agent.">Hello! I'm your MoChat demo agent. Ready to help!</textarea>
+                </div>
+                <button onclick="bindAgent()" id="bindBtn" disabled>Bind to Owner</button>
+            </div>
+        </div>
+
+        <!-- Messaging -->
+        <div class="card">
+            <h2>💬 Send Message</h2>
+            <div id="sendStatus"></div>
+            <div class="form-group">
+                <label>Message Content</label>
+                <textarea id="messageContent" placeholder="Type your message here...">Hello from MoChat! This is a test message.</textarea>
+            </div>
+            <button onclick="sendMessage()" id="sendBtn" disabled>Send Message</button>
+        </div>
+
+        <!-- Real-time Messages -->
+        <div class="card">
+            <h2>📨 Real-time Messages</h2>
+            <div class="messages" id="messages">
+                <div style="text-align: center; color: #999; padding: 20px;">
+                    Waiting for messages...
+                </div>
+            </div>
+            <button onclick="subscribeToSession()" id="subscribeBtn" disabled>Subscribe to Session</button>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="connection-status disconnected" id="connectionStatus">
+            <div class="dot"></div>
+            <span>Disconnected</span>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost:3000';
+        let agentToken = null;
+        let agentId = null;
+        let sessionId = null;
+        let socket = null;
+        let messageCount = 0;
+        let agentCount = 1;
+        let sessionCount = 0;
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            checkServerHealth();
+            // Load actual stats if agent is registered
+            loadSavedAgent();
+        });
+
+        async function checkServerHealth() {
+            try {
+                const response = await fetch(`${BASE_URL}/health`);
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showStatus('registerStatus', 'Server is healthy and ready!', 'success');
+                }
+            } catch (error) {
+                showStatus('registerStatus', 'Cannot connect to server. Make sure it\'s running on port 3000.', 'error');
+            }
+        }
+
+        function loadSavedAgent() {
+            // Check if agent credentials are saved in localStorage
+            const savedAgent = localStorage.getItem('mochat_agent');
+            if (savedAgent) {
+                try {
+                    const agent = JSON.parse(savedAgent);
+                    agentToken = agent.token;
+                    agentId = agent.agentId;
+                    sessionId = agent.sessionId;
+
+                    // Restore UI state
+                    showStatus('registerStatus',
+                        `✓ Restored session! Agent ID: ${agentId.substring(0, 20)}...`,
+                        'success'
+                    );
+
+                    document.getElementById('bindBtn').disabled = false;
+
+                    if (sessionId) {
+                        document.getElementById('sendBtn').disabled = false;
+                        document.getElementById('subscribeBtn').disabled = false;
+                        showStatus('bindStatus',
+                            `✓ Session restored: ${sessionId}`,
+                            'success'
+                        );
+                        sessionCount = 1;
+                    }
+
+                    agentCount = 1;
+                    updateStats();
+
+                    // Reconnect socket
+                    connectSocket();
+                    if (sessionId) {
+                        setTimeout(() => subscribeToSession(), 1000);
+                    }
+                } catch (e) {
+                    console.error('Failed to restore agent:', e);
+                    localStorage.removeItem('mochat_agent');
+                }
+            }
+        }
+
+        function saveAgent() {
+            const agent = {
+                token: agentToken,
+                agentId: agentId,
+                sessionId: sessionId
+            };
+            localStorage.setItem('mochat_agent', JSON.stringify(agent));
+        }
+
+        async function registerAgent() {
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const displayName = document.getElementById('displayName').value;
+
+            if (!username || !email) {
+                showStatus('registerStatus', 'Please fill in all fields', 'error');
+                return;
+            }
+
+            try {
+                showStatus('registerStatus', 'Registering agent...', 'info');
+
+                const response = await fetch(`${BASE_URL}/api/claw/agents/selfRegister`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, email, displayName }),
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    agentToken = data.data.token;
+                    agentId = data.data.botUserId;
+                    agentCount = 1;
+                    updateStats();
+
+                    showStatus('registerStatus',
+                        `✓ Agent registered! Token: ${agentToken.substring(0, 20)}...`,
+                        'success'
+                    );
+
+                    document.getElementById('bindBtn').disabled = false;
+                    connectSocket();
+                    saveAgent(); // Save to localStorage
+                } else {
+                    showStatus('registerStatus', `Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus('registerStatus', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function bindAgent() {
+            const ownerEmail = document.getElementById('ownerEmail').value;
+            const greetingMsg = document.getElementById('greetingMsg').value;
+
+            if (!ownerEmail) {
+                showStatus('bindStatus', 'Please enter owner email', 'error');
+                return;
+            }
+
+            try {
+                showStatus('bindStatus', 'Binding agent to owner...', 'info');
+
+                const response = await fetch(`${BASE_URL}/api/claw/agents/bind`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Claw-Token': agentToken,
+                    },
+                    body: JSON.stringify({
+                        email: ownerEmail,
+                        greeting_msg: greetingMsg
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    sessionId = data.data.sessionId;
+                    sessionCount = 1;
+                    updateStats();
+
+                    showStatus('bindStatus',
+                        `✓ Bound to owner! Session ID: ${sessionId}`,
+                        'success'
+                    );
+
+                    document.getElementById('sendBtn').disabled = false;
+                    document.getElementById('subscribeBtn').disabled = false;
+
+                    // Auto-subscribe
+                    subscribeToSession();
+                    saveAgent(); // Save updated state
+                } else {
+                    showStatus('bindStatus', `Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus('bindStatus', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function sendMessage() {
+            const content = document.getElementById('messageContent').value;
+
+            if (!content) {
+                showStatus('sendStatus', 'Please enter a message', 'error');
+                return;
+            }
+
+            try {
+                showStatus('sendStatus', 'Sending message...', 'info');
+
+                const response = await fetch(`${BASE_URL}/api/claw/sessions/send`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Claw-Token': agentToken,
+                    },
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        content: content
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    messageCount++;
+                    updateStats();
+                    showStatus('sendStatus', '✓ Message sent!', 'success');
+                    document.getElementById('messageContent').value = '';
+                } else {
+                    showStatus('sendStatus', `Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus('sendStatus', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        function connectSocket() {
+            if (socket) return;
+
+            socket = io(BASE_URL, {
+                auth: {
+                    token: agentToken
+                }
+            });
+
+            socket.on('connect', () => {
+                console.log('Socket connected:', socket.id);
+                updateConnectionStatus(true);
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Socket disconnected');
+                updateConnectionStatus(false);
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('Connection error:', error);
+                showStatus('registerStatus', `Socket connection error: ${error.message}`, 'error');
+            });
+
+            socket.on('notify:session', (data) => {
+                console.log('Received session message:', data);
+                addMessageToUI(data);
+                messageCount++;
+                updateStats();
+            });
+
+            socket.on('notify:panel', (data) => {
+                console.log('Received panel message:', data);
+                addMessageToUI(data);
+            });
+        }
+
+        function subscribeToSession() {
+            if (!socket) {
+                showStatus('sendStatus', 'Socket not connected', 'error');
+                return;
+            }
+
+            socket.emit('session:subscribe', { sessionId: sessionId });
+            showStatus('sendStatus', '✓ Subscribed to session events!', 'success');
+        }
+
+        function addMessageToUI(data) {
+            const messagesDiv = document.getElementById('messages');
+
+            // Clear "waiting" message
+            if (messagesDiv.querySelector('[style*="text-align: center"]')) {
+                messagesDiv.innerHTML = '';
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+
+            const time = new Date().toLocaleTimeString();
+
+            messageDiv.innerHTML = `
+                <div class="message-header">${data.sender.username} (${data.sender.type})</div>
+                <div class="message-content">${data.message.content}</div>
+                <div class="message-time">${time}</div>
+            `;
+
+            messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild);
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.className = 'connection-status connected';
+                statusEl.innerHTML = '<div class="dot"></div><span>Connected</span>';
+            } else {
+                statusEl.className = 'connection-status disconnected';
+                statusEl.innerHTML = '<div class="dot"></div><span>Disconnected</span>';
+            }
+        }
+
+        async function fetchStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+
+                // Update the display with server stats
+                document.getElementById('agentCount').textContent = stats.totalAgents || 0;
+                document.getElementById('sessionCount').textContent = stats.totalSessions || 0;
+                document.getElementById('messageCount').textContent = stats.totalMessages || 0;
+            } catch (error) {
+                console.error('Failed to fetch stats:', error);
+                // Fallback to client-side stats on error
+                updateStats();
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('agentCount').textContent = agentCount;
+            document.getElementById('sessionCount').textContent = sessionCount;
+            document.getElementById('messageCount').textContent = messageCount;
+        }
+
+        // Fetch stats from server every 5 seconds
+        setInterval(fetchStats, 5000);
+        // Fetch stats immediately on page load
+        fetchStats();
+
+        function showStatus(elementId, message, type) {
+            const statusEl = document.getElementById(elementId);
+            statusEl.className = `status ${type}`;
+            statusEl.textContent = message;
+            statusEl.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

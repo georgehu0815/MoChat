@@ -1,0 +1,324 @@
+/**
+ * MoChat Server - Main Entry Point
+ */
+
+import express from 'express';
+import { createServer } from 'http';
+import cors from 'cors';
+import dotenv from 'dotenv';
+
+// Data Stores
+import { IUserStore } from './data/IUserStore';
+import { UserStore } from './data/UserStore';
+import { MessageStore } from './data/MessageStore';
+import { MetadataStore } from './data/MetadataStore';
+import { MoChatDatabase } from './data/Database';
+import { SqliteUserStore } from './data/SqliteUserStore';
+
+// Services
+import { AgentManager } from './services/AgentManager';
+import { SessionManager } from './services/SessionManager';
+import { PanelManager } from './services/PanelManager';
+import { WorkspaceManager } from './services/WorkspaceManager';
+import { MessageRouter } from './services/MessageRouter';
+import { EventStreamer } from './services/EventStreamer';
+
+// API Routes
+import { createAgentRoutes } from './api/agents/routes';
+import { createSessionRoutes } from './api/sessions/routes';
+import { createPanelRoutes } from './api/panels/routes';
+import { createUserRoutes } from './api/users/routes';
+
+// Middleware
+import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+
+// Load environment variables
+dotenv.config();
+
+const PORT = process.env.PORT || 3000;
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+const SOCKET_PATH = process.env.SOCKET_PATH || '/socket.io';
+const USE_SQLITE = process.env.USE_SQLITE === 'true';
+
+/**
+ * Initialize the MoChat server
+ */
+export class MoChatServer {
+  private app: express.Application;
+  private httpServer: ReturnType<typeof createServer>;
+
+  // Database
+  private database?: MoChatDatabase;
+
+  // Data Stores
+  private userStore: IUserStore;
+  private messageStore: MessageStore;
+  private metadataStore: MetadataStore;
+
+  // Services
+  private agentManager: AgentManager;
+  private sessionManager: SessionManager;
+  private panelManager: PanelManager;
+  private workspaceManager: WorkspaceManager;
+  private messageRouter: MessageRouter;
+  private eventStreamer: EventStreamer;
+
+  constructor() {
+    this.app = express();
+    this.httpServer = createServer(this.app);
+
+    // Initialize data stores
+    if (USE_SQLITE) {
+      console.log('Initializing with SQLite storage...');
+      this.database = new MoChatDatabase();
+      this.userStore = new SqliteUserStore(this.database.getDb());
+    } else {
+      console.log('Initializing with in-memory storage...');
+      this.userStore = new UserStore();
+    }
+
+    this.messageStore = new MessageStore();
+    this.metadataStore = new MetadataStore();
+
+    // Initialize services
+    this.agentManager = new AgentManager(this.userStore, this.metadataStore);
+    this.sessionManager = new SessionManager(
+      this.userStore,
+      this.messageStore,
+      this.metadataStore
+    );
+    this.panelManager = new PanelManager(
+      this.userStore,
+      this.messageStore,
+      this.metadataStore
+    );
+    this.workspaceManager = new WorkspaceManager(
+      this.metadataStore,
+      this.userStore
+    );
+    this.messageRouter = new MessageRouter(this.userStore, this.metadataStore);
+    this.eventStreamer = new EventStreamer(
+      this.httpServer,
+      this.userStore,
+      this.metadataStore,
+      this.messageRouter,
+      {
+        path: SOCKET_PATH,
+        cors: {
+          origin: CORS_ORIGIN,
+          methods: ['GET', 'POST'],
+        },
+      }
+    );
+
+    this.setupMiddleware();
+    this.setupRoutes();
+    this.setupErrorHandling();
+  }
+
+  /**
+   * Setup Express middleware
+   */
+  private setupMiddleware(): void {
+    this.app.use(cors({ origin: CORS_ORIGIN }));
+    this.app.use(express.json());
+    this.app.use(express.urlencoded({ extended: true }));
+
+    // Serve static files from public directory
+    this.app.use(express.static('public'));
+
+    // Request logging
+    this.app.use((req, res, next) => {
+      console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+      next();
+    });
+  }
+
+  /**
+   * Setup API routes
+   */
+  private setupRoutes(): void {
+    // Health check
+    this.app.get('/health', (req, res) => {
+      res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        connectedUsers: this.eventStreamer.getConnectedUsersCount(),
+      });
+    });
+
+    // Statistics endpoint
+    this.app.get('/api/stats', (_req, res) => {
+      if (this.database) {
+        // Get stats from SQLite
+        const stats = this.database.getStats();
+        res.json(stats);
+      } else {
+        // Get stats from in-memory stores
+        const agents = this.userStore.getAllAgents();
+        const sessions = this.metadataStore.getAllSessions();
+        const workspaces = this.metadataStore.getAllWorkspaces();
+
+        res.json({
+          totalUsers: this.userStore.getAllUsers().length,
+          totalAgents: agents.length,
+          activeAgents: agents.filter(a => a.isActive).length,
+          totalSessions: sessions.length,
+          totalWorkspaces: workspaces.length,
+        });
+      }
+    });
+
+    // API routes
+    this.app.use(
+      '/api/claw/agents',
+      createAgentRoutes(this.agentManager, this.userStore)
+    );
+    this.app.use(
+      '/api/claw/sessions',
+      createSessionRoutes(
+        this.sessionManager,
+        this.eventStreamer,
+        this.messageRouter,
+        this.userStore
+      )
+    );
+    this.app.use(
+      '/api/claw/groups',
+      createPanelRoutes(
+        this.panelManager,
+        this.workspaceManager,
+        this.eventStreamer,
+        this.userStore
+      )
+    );
+    this.app.use('/api/claw/users', createUserRoutes(this.userStore));
+
+    // 404 handler
+    this.app.use(notFoundHandler);
+  }
+
+  /**
+   * Setup error handling
+   */
+  private setupErrorHandling(): void {
+    this.app.use(errorHandler);
+  }
+
+  /**
+   * Start the server
+   */
+  async start(): Promise<void> {
+    return new Promise((resolve) => {
+      this.httpServer.listen(PORT, () => {
+        console.log(`
+╔═══════════════════════════════════════════════════════════════╗
+║                   MoChat Server Started                       ║
+╠═══════════════════════════════════════════════════════════════╣
+║  HTTP Server:     http://localhost:${PORT}                        ║
+║  Socket.io Path:  ${SOCKET_PATH.padEnd(44)}║
+║  Environment:     ${process.env.NODE_ENV || 'development'.padEnd(44)}║
+║  CORS Origin:     ${CORS_ORIGIN.substring(0, 44).padEnd(44)}║
+╠═══════════════════════════════════════════════════════════════╣
+║  API Endpoints:                                                ║
+║    POST /api/claw/agents/selfRegister                         ║
+║    POST /api/claw/agents/bind                                 ║
+║    POST /api/claw/agents/rotateToken                          ║
+║    POST /api/claw/sessions/create                             ║
+║    POST /api/claw/sessions/send                               ║
+║    POST /api/claw/sessions/messages                           ║
+║    POST /api/claw/groups/get                                  ║
+║    POST /api/claw/groups/panels/send                          ║
+║    POST /api/claw/groups/panels/messages                      ║
+║    GET  /health                                               ║
+║    GET  /api/stats                                            ║
+╠═══════════════════════════════════════════════════════════════╣
+║  Socket.io Events:                                            ║
+║    - session:subscribe / session:unsubscribe                  ║
+║    - panel:subscribe / panel:unsubscribe                      ║
+║    - notify:session (incoming)                                ║
+║    - notify:panel (incoming)                                  ║
+╚═══════════════════════════════════════════════════════════════╝
+        `);
+        resolve();
+      });
+    });
+  }
+
+  /**
+   * Stop the server
+   */
+  async stop(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.httpServer.close((err) => {
+        if (err) {
+          reject(err);
+        } else {
+          // Close database connection if using SQLite
+          if (this.database) {
+            this.database.close();
+            console.log('Database connection closed');
+          }
+          console.log('MoChat server stopped');
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
+   * Get server instance (for testing)
+   */
+  getApp(): express.Application {
+    return this.app;
+  }
+
+  /**
+   * Get HTTP server (for testing)
+   */
+  getHttpServer(): ReturnType<typeof createServer> {
+    return this.httpServer;
+  }
+
+  /**
+   * Get services (for testing)
+   */
+  getServices() {
+    return {
+      userStore: this.userStore,
+      messageStore: this.messageStore,
+      metadataStore: this.metadataStore,
+      agentManager: this.agentManager,
+      sessionManager: this.sessionManager,
+      panelManager: this.panelManager,
+      workspaceManager: this.workspaceManager,
+      messageRouter: this.messageRouter,
+      eventStreamer: this.eventStreamer,
+    };
+  }
+}
+
+// Start server if run directly
+if (require.main === module) {
+  const server = new MoChatServer();
+
+  server.start().catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', async () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    await server.stop();
+    process.exit(0);
+  });
+
+  process.on('SIGINT', async () => {
+    console.log('SIGINT received, shutting down gracefully...');
+    await server.stop();
+    process.exit(0);
+  });
+}
+
+export default MoChatServer;
